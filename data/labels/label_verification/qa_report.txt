@@ -1,0 +1,17 @@
+KIDNEY STONE DATASET — LABEL VERIFICATION REPORT
+============================================================
+
+label  no_stone  stone
+split                 
+test       1680    224
+train      7728    952
+val        1661    201
+
+Total images: 12446
+Duplicate groups: 2579
+Issues found: 4
+
+  [ISSUE] WARNING: train imbalance 8.1:1 — monitor closely
+  [ISSUE] WARNING: val imbalance 8.3:1 — monitor closely
+  [ISSUE] WARNING: test imbalance 7.5:1 — monitor closely
+  [ISSUE] WARNING: 2579 duplicate image groups found
