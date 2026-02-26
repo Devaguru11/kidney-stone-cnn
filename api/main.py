@@ -9,12 +9,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import torch
 
+# Prometheus instrumentation
+from prometheus_fastapi_instrumentator import Instrumentator
+from api.metrics import (
+    PREDICTIONS_TOTAL, CONFIDENCE_HISTOGRAM,
+    INFERENCE_LATENCY, MODEL_STATUS, ACTIVE_REQUESTS
+)
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from api.inference import KidneyStonePredictor
 from api.schemas import PredictionResponse, HealthResponse, ModelInfoResponse
 
-# ── Global predictor instance (loaded once at startup) ────────────
+# ── Global predictor instance (loaded once at startup) ────────────────────────
 predictor: KidneyStonePredictor = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -26,10 +34,13 @@ async def lifespan(app: FastAPI):
         checkpoint_path='checkpoints/best_model.pth',
         threshold=0.5
     )
-    yield  # API is running here
+    MODEL_STATUS.set(1)   # ← model is loaded
+    yield                 # API is running here
+    MODEL_STATUS.set(0)   # ← model unloaded on shutdown
     print('Shutting down...')
 
-# ── Create FastAPI app ────────────────────────────────────────────
+
+# ── Create FastAPI app ─────────────────────────────────────────────────────────
 app = FastAPI(
     title='Kidney Stone Detection API',
     description='EfficientNet-B4 model for detecting kidney stones in CT/ultrasound images. Returns prediction, confidence, and Grad-CAM heatmap.',
@@ -37,7 +48,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Allow requests from any origin (needed for browser-based testing)
+# ── Prometheus instrumentation ─────────────────────────────────────────────────
+# Automatically adds GET /metrics endpoint with HTTP request metrics
+Instrumentator().instrument(app).expose(app)
+
+# ── CORS ───────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
     allow_origins=['*'],
@@ -45,7 +60,8 @@ app.add_middleware(
     allow_headers=['*'],
 )
 
-# ── Endpoints ─────────────────────────────────────────────────────
+
+# ── Endpoints ──────────────────────────────────────────────────────────────────
 
 @app.get('/health', response_model=HealthResponse, tags=['System'])
 async def health_check():
@@ -57,6 +73,7 @@ async def health_check():
         model_version='efficientnet_b4_v1',
         device=device,
     )
+
 
 @app.get('/model-info', response_model=ModelInfoResponse, tags=['System'])
 async def model_info():
@@ -70,6 +87,7 @@ async def model_info():
         training_sensitivity=1.0,
         threshold=predictor.threshold if predictor else 0.5,
     )
+
 
 @app.post('/predict', response_model=PredictionResponse, tags=['Inference'])
 async def predict(
@@ -92,17 +110,27 @@ async def predict(
             detail=f'Unsupported file type: {file.content_type}. Use JPG or PNG.'
         )
 
+    ACTIVE_REQUESTS.inc()
     try:
         image_bytes = await file.read()
         start = time.time()
         result = predictor.predict(image_bytes, include_gradcam=include_gradcam)
         elapsed = round(time.time() - start, 3)
+
+        # Record custom metrics
+        PREDICTIONS_TOTAL.labels(prediction=result['prediction']).inc()
+        CONFIDENCE_HISTOGRAM.observe(result['confidence'])
+        INFERENCE_LATENCY.observe(elapsed)
+
         print(f'Predicted: {result["prediction"]} ({result["confidence"]:.2%}) in {elapsed}s')
         return PredictionResponse(**result)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f'Inference error: {str(e)}')
+    finally:
+        ACTIVE_REQUESTS.dec()
+
 
 @app.post('/predict/batch', tags=['Inference'])
 async def predict_batch(
@@ -117,15 +145,20 @@ async def predict_batch(
 
     results = []
     for f in files:
+        ACTIVE_REQUESTS.inc()
         try:
             image_bytes = await f.read()
             result = predictor.predict(image_bytes, include_gradcam=include_gradcam)
             result['filename'] = f.filename
+
+            # Record metrics for each image in the batch
+            PREDICTIONS_TOTAL.labels(prediction=result['prediction']).inc()
+            CONFIDENCE_HISTOGRAM.observe(result['confidence'])
+
             results.append(result)
         except Exception as e:
             results.append({'filename': f.filename, 'error': str(e)})
+        finally:
+            ACTIVE_REQUESTS.dec()
+
     return {'predictions': results, 'total': len(results)}
-
-
-    
-    

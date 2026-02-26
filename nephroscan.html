@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NephroScan AI — Kidney Stone Detection</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #070d15;
+            --surface: #0d1520;
+            --surface2: #111d2e;
+            --border: rgba(45, 156, 219, 0.15);
+            --blue: #2D9CDB;
+            --teal: #00D4AA;
+            --red: #FF4B6E;
+            --green: #00D4AA;
+            --orange: #FF8C42;
+            --text: #E8F4FD;
+            --text-muted: #5A7A99;
+            --text-dim: #3A5A79;
+            --glow-blue: rgba(45, 156, 219, 0.3);
+            --glow-red: rgba(255, 75, 110, 0.3);
+            --glow-green: rgba(0, 212, 170, 0.3);
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'DM Sans', sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Background grid */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(45, 156, 219, 0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(45, 156, 219, 0.04) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        body::after {
+            content: '';
+            position: fixed;
+            top: -30%;
+            left: -10%;
+            width: 60%;
+            height: 60%;
+            background: radial-gradient(ellipse, rgba(45, 156, 219, 0.06) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ── HEADER ── */
+        header {
+            position: relative;
+            z-index: 10;
+            padding: 20px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+            background: rgba(7, 13, 21, 0.9);
+            backdrop-filter: blur(20px);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .logo-icon {
+            width: 42px;
+            height: 42px;
+            background: linear-gradient(135deg, var(--blue), var(--teal));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 0 20px var(--glow-blue);
+        }
+
+        .logo-text {
+            font-family: 'Syne', sans-serif;
+            font-weight: 800;
+            font-size: 20px;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #fff 0%, var(--blue) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .logo-sub {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-family: 'DM Mono', monospace;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-top: 2px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 14px;
+            border-radius: 20px;
+            border: 1px solid;
+            font-size: 12px;
+            font-family: 'DM Mono', monospace;
+            letter-spacing: 0.5px;
+            transition: all 0.3s;
+        }
+
+        .status-badge.online {
+            border-color: rgba(0, 212, 170, 0.4);
+            background: rgba(0, 212, 170, 0.08);
+            color: var(--teal);
+        }
+
+        .status-badge.offline {
+            border-color: rgba(255, 75, 110, 0.4);
+            background: rgba(255, 75, 110, 0.08);
+            color: var(--red);
+        }
+
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .status-badge.online .status-dot {
+            animation: pulse-green 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-green {
+
+            0%,
+            100% {
+                opacity: 1;
+                box-shadow: 0 0 0 0 rgba(0, 212, 170, 0.5);
+            }
+
+            50% {
+                opacity: 0.7;
+                box-shadow: 0 0 0 4px rgba(0, 212, 170, 0);
+            }
+        }
+
+        /* ── MAIN LAYOUT ── */
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1300px;
+            margin: 0 auto;
+            padding: 36px 40px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        /* ── CARDS ── */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--blue), transparent);
+            opacity: 0.5;
+        }
+
+        .card-label {
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-label::before {
+            content: '';
+            width: 16px;
+            height: 1px;
+            background: var(--blue);
+            display: inline-block;
+        }
+
+        /* ── UPLOAD ZONE ── */
+        .upload-zone {
+            border: 2px dashed rgba(45, 156, 219, 0.3);
+            border-radius: 12px;
+            padding: 48px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            background: rgba(45, 156, 219, 0.02);
+        }
+
+        .upload-zone:hover,
+        .upload-zone.drag-over {
+            border-color: var(--blue);
+            background: rgba(45, 156, 219, 0.06);
+            box-shadow: 0 0 30px var(--glow-blue);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            display: block;
+            filter: drop-shadow(0 0 10px var(--glow-blue));
+        }
+
+        .upload-title {
+            font-family: 'Syne', sans-serif;
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--text);
+        }
+
+        .upload-sub {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+        }
+
+        .upload-btn {
+            display: inline-block;
+            padding: 10px 24px;
+            background: linear-gradient(135deg, var(--blue), #1a6fa8);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'DM Sans', sans-serif;
+            box-shadow: 0 4px 15px var(--glow-blue);
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px var(--glow-blue);
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        /* ── IMAGE PREVIEW ── */
+        .preview-container {
+            display: none;
+            margin-top: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            position: relative;
+        }
+
+        .preview-container img {
+            width: 100%;
+            max-height: 220px;
+            object-fit: cover;
+            display: block;
+        }
+
+        .preview-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(7, 13, 21, 0.9));
+            padding: 12px;
+            font-size: 12px;
+            color: var(--text-muted);
+            font-family: 'DM Mono', monospace;
+        }
+
+        /* ── LOADING ── */
+        .loading {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            padding: 32px;
+        }
+
+        .scan-animation {
+            width: 80px;
+            height: 80px;
+            position: relative;
+        }
+
+        .scan-ring {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            border-top-color: var(--blue);
+            animation: spin 1s linear infinite;
+        }
+
+        .scan-ring:nth-child(2) {
+            inset: 10px;
+            border-top-color: var(--teal);
+            animation-duration: 1.5s;
+            animation-direction: reverse;
+        }
+
+        .scan-ring:nth-child(3) {
+            inset: 20px;
+            border-top-color: rgba(45, 156, 219, 0.5);
+            animation-duration: 2s;
+        }
+
+        .scan-center {
+            position: absolute;
+            inset: 30px;
+            background: var(--blue);
+            border-radius: 50%;
+            opacity: 0.3;
+            animation: pulse-center 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes pulse-center {
+
+            0%,
+            100% {
+                opacity: 0.3;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.8;
+                transform: scale(1.1);
+            }
+        }
+
+        .loading-text {
+            font-family: 'DM Mono', monospace;
+            font-size: 13px;
+            color: var(--blue);
+            letter-spacing: 1px;
+        }
+
+        .loading-dots::after {
+            content: '';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+
+        @keyframes dots {
+            0% {
+                content: '';
+            }
+
+            25% {
+                content: '.';
+            }
+
+            50% {
+                content: '..';
+            }
+
+            75% {
+                content: '...';
+            }
+
+            100% {
+                content: '';
+            }
+        }
+
+        /* ── RESULT CARD ── */
+        .result-panel {
+            display: none;
+            margin-top: 20px;
+            animation: fadeSlideUp 0.5s ease forwards;
+        }
+
+        @keyframes fadeSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(16px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .verdict {
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            margin-bottom: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .verdict.stone {
+            background: linear-gradient(135deg, rgba(255, 75, 110, 0.15), rgba(255, 75, 110, 0.05));
+            border: 1px solid rgba(255, 75, 110, 0.3);
+            box-shadow: 0 0 40px rgba(255, 75, 110, 0.1);
+        }
+
+        .verdict.no-stone {
+            background: linear-gradient(135deg, rgba(0, 212, 170, 0.15), rgba(0, 212, 170, 0.05));
+            border: 1px solid rgba(0, 212, 170, 0.3);
+            box-shadow: 0 0 40px rgba(0, 212, 170, 0.1);
+        }
+
+        .verdict-icon {
+            font-size: 36px;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .verdict-text {
+            font-family: 'Syne', sans-serif;
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            margin-bottom: 6px;
+        }
+
+        .verdict.stone .verdict-text {
+            color: var(--red);
+        }
+
+        .verdict.no-stone .verdict-text {
+            color: var(--teal);
+        }
+
+        .verdict-confidence {
+            font-family: 'DM Mono', monospace;
+            font-size: 32px;
+            font-weight: 500;
+            color: var(--text);
+            margin-bottom: 8px;
+        }
+
+        .verdict-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-family: 'DM Mono', monospace;
+        }
+
+        /* ── CONFIDENCE BARS ── */
+        .bars {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .bar-row {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .bar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .bar-label {
+            font-size: 12px;
+            font-family: 'DM Mono', monospace;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .bar-pct {
+            font-size: 14px;
+            font-family: 'DM Mono', monospace;
+            font-weight: 500;
+        }
+
+        .bar-track {
+            height: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            border-radius: 6px;
+            width: 0%;
+            transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .bar-fill.stone-bar {
+            background: linear-gradient(90deg, #FF4B6E, #FF8C42);
+            box-shadow: 0 0 10px rgba(255, 75, 110, 0.5);
+        }
+
+        .bar-fill.no-stone-bar {
+            background: linear-gradient(90deg, #00D4AA, #00A896);
+            box-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
+        }
+
+        .bar-caption {
+            margin-top: 10px;
+            font-size: 11px;
+            color: var(--text-dim);
+            font-family: 'DM Mono', monospace;
+            text-align: center;
+        }
+
+        /* ── DOWNLOAD BUTTON (Phase 6) ── */
+        #downloadBtn {
+            display: none;
+            margin-top: 20px;
+            width: 100%;
+            padding: 14px 24px;
+            background: linear-gradient(135deg, #1A3A5C, #2D6EA8);
+            border: 1px solid rgba(45, 110, 168, 0.5);
+            border-radius: 10px;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'DM Sans', sans-serif;
+            letter-spacing: 0.3px;
+        }
+
+        #downloadBtn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(45, 110, 168, 0.4);
+        }
+
+        #downloadBtn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* ── GRADCAM PANEL ── */
+        .gradcam-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 4px;
+        }
+
+        .scan-frame {
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            background: var(--surface2);
+            aspect-ratio: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .scan-frame img {
+            width: 100%;
+            flex: 1;
+            object-fit: cover;
+            display: block;
+            min-height: 0;
+        }
+
+        .scan-frame-label {
+            padding: 8px 12px;
+            font-size: 10px;
+            font-family: 'DM Mono', monospace;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            text-align: center;
+            border-top: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .gradcam-placeholder {
+            aspect-ratio: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            border: 1px dashed var(--border);
+            border-radius: 10px;
+            color: var(--text-dim);
+            font-size: 12px;
+            font-family: 'DM Mono', monospace;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .gradcam-caption {
+            margin-top: 14px;
+            font-size: 11px;
+            color: var(--text-dim);
+            font-family: 'DM Mono', monospace;
+            text-align: center;
+            line-height: 1.6;
+        }
+
+        /* ── HISTORY ── */
+        .history-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .clear-btn {
+            padding: 6px 14px;
+            background: transparent;
+            border: 1px solid rgba(255, 75, 110, 0.3);
+            border-radius: 6px;
+            color: var(--red);
+            font-size: 11px;
+            font-family: 'DM Mono', monospace;
+            cursor: pointer;
+            transition: all 0.2s;
+            letter-spacing: 0.5px;
+        }
+
+        .clear-btn:hover {
+            background: rgba(255, 75, 110, 0.1);
+            border-color: var(--red);
+        }
+
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .history-table th {
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            padding: 10px 14px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+            font-weight: 500;
+        }
+
+        .history-table td {
+            padding: 11px 14px;
+            border-bottom: 1px solid rgba(45, 156, 219, 0.06);
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            transition: background 0.2s;
+        }
+
+        .history-table tr:hover td {
+            background: rgba(45, 156, 219, 0.04);
+        }
+
+        .history-table .pred-stone {
+            color: var(--red);
+        }
+
+        .history-table .pred-no-stone {
+            color: var(--teal);
+        }
+
+        .history-empty {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-dim);
+            font-family: 'DM Mono', monospace;
+            font-size: 12px;
+            letter-spacing: 1px;
+        }
+
+        .badge-stone {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: rgba(255, 75, 110, 0.15);
+            border: 1px solid rgba(255, 75, 110, 0.3);
+            color: var(--red);
+            font-size: 10px;
+        }
+
+        .badge-no-stone {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: rgba(0, 212, 170, 0.1);
+            border: 1px solid rgba(0, 212, 170, 0.3);
+            color: var(--teal);
+            font-size: 10px;
+        }
+
+        /* ── FOOTER ── */
+        footer {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            padding: 24px;
+            border-top: 1px solid var(--border);
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+            letter-spacing: 1px;
+        }
+
+        footer span {
+            color: var(--blue);
+        }
+
+        /* ── ERROR TOAST ── */
+        .toast {
+            display: none;
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            padding: 14px 20px;
+            background: var(--surface);
+            border: 1px solid rgba(255, 75, 110, 0.4);
+            border-radius: 10px;
+            color: var(--red);
+            font-size: 13px;
+            font-family: 'DM Mono', monospace;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+            max-width: 340px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(20px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 900px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .container {
+                padding: 20px;
+            }
+
+            header {
+                padding: 16px 20px;
+            }
+
+            .gradcam-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- HEADER -->
+    <header>
+        <div class="logo">
+            <div class="logo-icon">🫘</div>
+            <div>
+                <div class="logo-text">NephroScan AI</div>
+                <div class="logo-sub">Kidney Stone Detection System</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="status-badge offline" id="statusBadge">
+                <span class="status-dot"></span>
+                <span id="statusText">Connecting...</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN -->
+    <div class="container">
+        <div class="grid">
+
+            <!-- LEFT: Upload + Result -->
+            <div style="display:flex; flex-direction:column; gap:24px;">
+
+                <!-- Upload Card -->
+                <div class="card">
+                    <div class="card-label">Scan Upload</div>
+
+                    <div class="upload-zone" id="uploadZone">
+                        <span class="upload-icon">🔬</span>
+                        <div class="upload-title">Drop kidney scan here</div>
+                        <div class="upload-sub">JPG or PNG · Max 10MB</div>
+                        <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                            Select Image
+                        </button>
+                        <input type="file" id="fileInput" accept=".jpg,.jpeg,.png">
+                    </div>
+
+                    <div class="preview-container" id="previewContainer">
+                        <img id="previewImg" src="" alt="Preview">
+                        <div class="preview-overlay" id="previewMeta"></div>
+                    </div>
+
+                    <!-- Loading -->
+                    <div class="loading" id="loadingPanel">
+                        <div class="scan-animation">
+                            <div class="scan-ring"></div>
+                            <div class="scan-ring"></div>
+                            <div class="scan-ring"></div>
+                            <div class="scan-center"></div>
+                        </div>
+                        <div class="loading-text">Analyzing scan<span class="loading-dots"></span></div>
+                    </div>
+
+                    <!-- Result Verdict -->
+                    <div class="result-panel" id="resultPanel">
+                        <div class="verdict" id="verdict">
+                            <span class="verdict-icon" id="verdictIcon"></span>
+                            <div class="verdict-text" id="verdictText"></div>
+                            <div class="verdict-confidence" id="verdictConf"></div>
+                            <div class="verdict-meta" id="verdictMeta"></div>
+                        </div>
+
+                        <!-- Confidence Bars -->
+                        <div class="bars">
+                            <div class="bar-row">
+                                <div class="bar-header">
+                                    <span class="bar-label">Stone</span>
+                                    <span class="bar-pct" id="stoneBarPct" style="color:var(--red)">0%</span>
+                                </div>
+                                <div class="bar-track">
+                                    <div class="bar-fill stone-bar" id="stoneBar"></div>
+                                </div>
+                            </div>
+                            <div class="bar-row">
+                                <div class="bar-header">
+                                    <span class="bar-label">No Stone</span>
+                                    <span class="bar-pct" id="noStoneBarPct" style="color:var(--teal)">0%</span>
+                                </div>
+                                <div class="bar-track">
+                                    <div class="bar-fill no-stone-bar" id="noStoneBar"></div>
+                                </div>
+                            </div>
+                            <div class="bar-caption">Threshold: 0.5 — predictions above 50% classified as stone</div>
+                        </div>
+
+                        <!-- ── DOWNLOAD BUTTON (Phase 6) ── -->
+                        <button id="downloadBtn" onclick="downloadReport()">
+                            ⬇️ Download Clinical Report (PDF)
+                        </button>
+
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT: Grad-CAM -->
+            <div class="card">
+                <div class="card-label">AI Focus Area — Grad-CAM</div>
+
+                <div class="gradcam-grid" id="gradcamGrid">
+                    <div class="gradcam-placeholder" id="originalPlaceholder">
+                        <span style="font-size:28px">🖼️</span>
+                        <div>Original scan<br>will appear here</div>
+                    </div>
+                    <div class="gradcam-placeholder" id="heatmapPlaceholder">
+                        <span style="font-size:28px">🌡️</span>
+                        <div>Heatmap<br>will appear here</div>
+                    </div>
+                </div>
+
+                <p class="gradcam-caption" id="gradcamCaption" style="display:none">
+                    🔴 Red regions indicate areas the AI focused on most for this prediction
+                </p>
+            </div>
+        </div>
+
+        <!-- HISTORY -->
+        <div class="card">
+            <div class="history-header">
+                <div class="card-label" style="margin-bottom:0">Prediction History</div>
+                <button class="clear-btn" onclick="clearHistory()">Clear History</button>
+            </div>
+
+            <div id="historyEmpty" class="history-empty">No predictions yet — upload a scan above</div>
+
+            <div id="historyTableWrap" style="display:none; overflow-x:auto;">
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Filename</th>
+                            <th>Prediction</th>
+                            <th>Confidence</th>
+                            <th>Stone Prob.</th>
+                            <th>No Stone Prob.</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer>
+        Powered by <span>EfficientNet-B4</span> &nbsp;·&nbsp; NephroScan AI &nbsp;·&nbsp; Phase 6 &nbsp;·&nbsp; v1.0
+    </footer>
+
+    <!-- ERROR TOAST -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API = 'http://localhost:8000';
+        let history = [];
+        let currentFile = null;
+        let currentResult = null;  // ← Phase 6: stores latest prediction result
+
+        // ── Health Check ──
+        async function checkHealth() {
+            try {
+                const res = await fetch(`${API}/health`);
+                const data = await res.json();
+                const badge = document.getElementById('statusBadge');
+                const txt = document.getElementById('statusText');
+                if (data.status === 'healthy' && data.model_loaded) {
+                    badge.className = 'status-badge online';
+                    txt.textContent = 'Model Online';
+                } else {
+                    badge.className = 'status-badge offline';
+                    txt.textContent = 'Model Not Ready';
+                }
+            } catch {
+                const badge = document.getElementById('statusBadge');
+                document.getElementById('statusText').textContent = 'API Offline';
+                badge.className = 'status-badge offline';
+            }
+        }
+
+        checkHealth();
+        setInterval(checkHealth, 30000);
+
+        // ── Drag & Drop ──
+        const zone = document.getElementById('uploadZone');
+        zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+        zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+        zone.addEventListener('drop', e => {
+            e.preventDefault();
+            zone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file) handleFile(file);
+        });
+
+        document.getElementById('fileInput').addEventListener('change', e => {
+            if (e.target.files[0]) handleFile(e.target.files[0]);
+        });
+
+        // ── Handle File ──
+        function handleFile(file) {
+            if (!['image/jpeg', 'image/png'].includes(file.type)) {
+                showToast('Only JPG and PNG files are supported.');
+                return;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+                showToast('File too large. Maximum size is 10MB.');
+                return;
+            }
+
+            currentFile = file;
+
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = e => {
+                document.getElementById('previewImg').src = e.target.result;
+                document.getElementById('previewMeta').textContent = `${file.name}  ·  ${(file.size / 1024).toFixed(0)} KB`;
+                document.getElementById('previewContainer').style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+
+            runPrediction(file);
+        }
+
+        // ── Run Prediction ──
+        async function runPrediction(file) {
+            document.getElementById('loadingPanel').style.display = 'flex';
+            document.getElementById('resultPanel').style.display = 'none';
+            document.getElementById('downloadBtn').style.display = 'none';
+            resetGradCam();
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch(`${API}/predict?include_gradcam=true`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!res.ok) throw new Error(`API error ${res.status}`);
+                const data = await res.json();
+                showResult(data, file.name);
+            } catch (err) {
+                document.getElementById('loadingPanel').style.display = 'none';
+                showToast('Cannot connect to API. Make sure FastAPI is running on port 8000.');
+            }
+        }
+
+        // ── Show Result ──
+        function showResult(data, filename) {
+            document.getElementById('loadingPanel').style.display = 'none';
+            const panel = document.getElementById('resultPanel');
+            panel.style.display = 'block';
+
+            const isStone = data.prediction === 'stone';
+            const verdict = document.getElementById('verdict');
+            verdict.className = 'verdict ' + (isStone ? 'stone' : 'no-stone');
+
+            document.getElementById('verdictIcon').textContent = isStone ? '⚠️' : '✅';
+            document.getElementById('verdictText').textContent = isStone ? 'STONE DETECTED' : 'NO STONE DETECTED';
+            document.getElementById('verdictConf').textContent = (data.confidence * 100).toFixed(2) + '%';
+            document.getElementById('verdictMeta').textContent =
+                `Model: ${data.model_version}  ·  Threshold: ${data.threshold_used}`;
+
+            // Animate bars
+            const stonePct = (data.probability_stone * 100).toFixed(1);
+            const noStonePct = (data.probability_no_stone * 100).toFixed(1);
+
+            setTimeout(() => {
+                document.getElementById('stoneBar').style.width = stonePct + '%';
+                document.getElementById('noStoneBar').style.width = noStonePct + '%';
+            }, 100);
+
+            document.getElementById('stoneBarPct').textContent = stonePct + '%';
+            document.getElementById('noStoneBarPct').textContent = noStonePct + '%';
+
+            // Grad-CAM
+            updateGradCam(data.gradcam_heatmap);
+
+            // ── Phase 6: store result and show download button ──
+            currentResult = data;
+            document.getElementById('downloadBtn').style.display = 'block';
+
+            // History
+            addToHistory(data, filename);
+        }
+
+        // ── Grad-CAM ──
+        function updateGradCam(heatmap) {
+            const grid = document.getElementById('gradcamGrid');
+            const originalSrc = document.getElementById('previewImg').src;
+
+            let originalFrame = `
+                <div class="scan-frame">
+                    <img src="${originalSrc}" alt="Original Scan">
+                    <div class="scan-frame-label">Original Scan</div>
+                </div>`;
+
+            let heatmapFrame = heatmap
+                ? `<div class="scan-frame">
+                       <img src="data:image/png;base64,${heatmap}" alt="Grad-CAM Heatmap">
+                       <div class="scan-frame-label">AI Focus Area</div>
+                   </div>`
+                : `<div class="gradcam-placeholder">
+                       <span style="font-size:24px">🌡️</span>
+                       <div>Heatmap<br>Unavailable</div>
+                   </div>`;
+
+            grid.innerHTML = originalFrame + heatmapFrame;
+
+            if (heatmap) {
+                document.getElementById('gradcamCaption').style.display = 'block';
+            }
+        }
+
+        function resetGradCam() {
+            document.getElementById('gradcamCaption').style.display = 'none';
+            document.getElementById('gradcamGrid').innerHTML = `
+                <div class="gradcam-placeholder">
+                    <span style="font-size:28px">🖼️</span>
+                    <div>Original scan<br>will appear here</div>
+                </div>
+                <div class="gradcam-placeholder">
+                    <span style="font-size:28px">🌡️</span>
+                    <div>Heatmap<br>will appear here</div>
+                </div>`;
+        }
+
+        // ── History ──
+        function addToHistory(data, filename) {
+            const now = new Date();
+            const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+            history.unshift({
+                time,
+                filename: filename.length > 20 ? filename.substring(0, 18) + '...' : filename,
+                prediction: data.prediction,
+                confidence: (data.confidence * 100).toFixed(2) + '%',
+                stonePct: (data.probability_stone * 100).toFixed(2) + '%',
+                noStonePct: (data.probability_no_stone * 100).toFixed(2) + '%',
+            });
+
+            if (history.length > 10) history.pop();
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const tbody = document.getElementById('historyBody');
+            const empty = document.getElementById('historyEmpty');
+            const wrap = document.getElementById('historyTableWrap');
+
+            if (history.length === 0) {
+                empty.style.display = 'block';
+                wrap.style.display = 'none';
+                return;
+            }
+
+            empty.style.display = 'none';
+            wrap.style.display = 'block';
+
+            tbody.innerHTML = history.map(h => {
+                const isStone = h.prediction === 'stone';
+                return `<tr>
+                    <td>${h.time}</td>
+                    <td>${h.filename}</td>
+                    <td><span class="${isStone ? 'badge-stone' : 'badge-no-stone'}">${h.prediction}</span></td>
+                    <td>${h.confidence}</td>
+                    <td style="color:var(--red)">${h.stonePct}</td>
+                    <td style="color:var(--teal)">${h.noStonePct}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        function clearHistory() {
+            history = [];
+            renderHistory();
+        }
+
+        // ── Toast ──
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, 4000);
+        }
+
+        // ── Download Report (Phase 6) ──
+        async function downloadReport() {
+            const btn = document.getElementById('downloadBtn');
+            btn.disabled = true;
+            btn.textContent = 'Generating PDF...';
+
+            const formData = new FormData();
+            formData.append('file', currentFile);
+            formData.append('result', JSON.stringify(currentResult));
+
+            try {
+                const res = await fetch(`${API}/report`, {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!res.ok) throw new Error(`API error ${res.status}`);
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `nephroscan_report_${Date.now()}.pdf`;
+                a.click();
+                URL.revokeObjectURL(url);
+            } catch (err) {
+                showToast('Failed to generate report. Is FastAPI running?');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '⬇️ Download Clinical Report (PDF)';
+            }
+        }
+    </script>
+</body>
+
+</html>
