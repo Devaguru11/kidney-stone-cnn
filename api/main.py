@@ -19,6 +19,7 @@ from api.metrics import (
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from api.inference import KidneyStonePredictor
 from api.schemas import PredictionResponse, HealthResponse, ModelInfoResponse
+from api import report as report_router
 
 # ── Global predictor instance (loaded once at startup) ────────────────────────
 predictor: KidneyStonePredictor = None
@@ -51,6 +52,9 @@ app = FastAPI(
 # ── Prometheus instrumentation ─────────────────────────────────────────────────
 # Automatically adds GET /metrics endpoint with HTTP request metrics
 Instrumentator().instrument(app).expose(app)
+
+# ── Report router ─────────────────────────────────────────────────────────────
+app.include_router(report_router.router)
 
 # ── CORS ───────────────────────────────────────────────────────────────────────
 app.add_middleware(

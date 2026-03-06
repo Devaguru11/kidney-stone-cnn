@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NephroScan AI v2 — Kidney Condition Classifier</title>
+    <style>
+        :root {
+            --navy: #0D1B2A;
+            --sky: #1E88E5;
+            --normal: #2E7D32;
+            --cyst: #1565C0;
+            --stone: #E65100;
+            --tumour: #B71C1C;
+            --bg: #F4F6F9;
+            --card: #FFFFFF;
+            --border: #E0E6ED;
+            --text: #1A1A2E;
+            --muted: #546E7A;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        header {
+            background: var(--navy);
+            padding: 18px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo h1 {
+            color: #fff;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .logo span {
+            color: var(--sky);
+            font-size: 13px;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
+            padding: 6px 14px;
+            color: #fff;
+            font-size: 13px;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ccc;
+        }
+
+        .dot.online {
+            background: #4CAF50;
+            box-shadow: 0 0 6px #4CAF50;
+        }
+
+        .dot.offline {
+            background: #f44336;
+        }
+
+        main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 28px 24px;
+        }
+
+        .legend {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .legend-card {
+            background: var(--card);
+            border-radius: 10px;
+            padding: 12px 16px;
+            border-left: 4px solid;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+        }
+
+        .legend-card .cls-name {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 3px;
+        }
+
+        .legend-card .cls-desc {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .legend-card.normal {
+            border-color: var(--normal);
+        }
+
+        .legend-card.normal .cls-name {
+            color: var(--normal);
+        }
+
+        .legend-card.cyst {
+            border-color: var(--cyst);
+        }
+
+        .legend-card.cyst .cls-name {
+            color: var(--cyst);
+        }
+
+        .legend-card.stone {
+            border-color: var(--stone);
+        }
+
+        .legend-card.stone .cls-name {
+            color: var(--stone);
+        }
+
+        .legend-card.tumour {
+            border-color: var(--tumour);
+        }
+
+        .legend-card.tumour .cls-name {
+            color: var(--tumour);
+        }
+
+        .top-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 14px;
+            padding: 24px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+            border: 1px solid var(--border);
+        }
+
+        .card h2 {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: var(--navy);
+            border-bottom: 2px solid var(--sky);
+            padding-bottom: 8px;
+        }
+
+        .drop-zone {
+            border: 2px dashed var(--border);
+            border-radius: 10px;
+            padding: 32px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: var(--bg);
+            position: relative;
+        }
+
+        .drop-zone:hover,
+        .drop-zone.drag-over {
+            border-color: var(--sky);
+            background: #EBF3FD;
+        }
+
+        .drop-zone input {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .drop-icon {
+            font-size: 36px;
+            margin-bottom: 8px;
+        }
+
+        .drop-text {
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .drop-text strong {
+            color: var(--sky);
+        }
+
+        .preview-wrap {
+            margin-top: 14px;
+            display: none;
+        }
+
+        .preview-wrap img {
+            width: 100%;
+            max-height: 220px;
+            object-fit: contain;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .file-name {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 6px;
+            text-align: center;
+        }
+
+        .btn {
+            width: 100%;
+            margin-top: 14px;
+            padding: 13px;
+            background: var(--sky);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: #1565C0;
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            background: #B0BEC5;
+            cursor: not-allowed;
+        }
+
+        .gradcam-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            font-size: 13px;
+            color: var(--muted);
+            cursor: pointer;
+        }
+
+        .gradcam-toggle input {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        /* Result */
+        .result-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            min-height: 280px;
+            color: var(--muted);
+            gap: 10px;
+            text-align: center;
+        }
+
+        .result-empty .icon {
+            font-size: 44px;
+            opacity: 0.4;
+        }
+
+        .result-content {
+            display: none;
+        }
+
+        .verdict {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            border-left: 5px solid;
+        }
+
+        .verdict.normal {
+            background: #E8F5E9;
+            border-color: var(--normal);
+        }
+
+        .verdict.cyst {
+            background: #E3F2FD;
+            border-color: var(--cyst);
+        }
+
+        .verdict.stone {
+            background: #FBE9E7;
+            border-color: var(--stone);
+        }
+
+        .verdict.tumour {
+            background: #FFEBEE;
+            border-color: var(--tumour);
+        }
+
+        .verdict-icon {
+            font-size: 32px;
+        }
+
+        .verdict-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 1px;
+            opacity: 0.7;
+            margin-bottom: 3px;
+        }
+
+        .verdict-name {
+            font-size: 22px;
+            font-weight: 800;
+        }
+
+        .verdict-conf {
+            font-size: 13px;
+            opacity: 0.75;
+            margin-top: 2px;
+        }
+
+        .verdict.normal .verdict-name {
+            color: var(--normal);
+        }
+
+        .verdict.cyst .verdict-name {
+            color: var(--cyst);
+        }
+
+        .verdict.stone .verdict-name {
+            color: var(--stone);
+        }
+
+        .verdict.tumour .verdict-name {
+            color: var(--tumour);
+        }
+
+        .prob-bars {
+            margin-bottom: 14px;
+        }
+
+        .prob-row {
+            margin-bottom: 8px;
+        }
+
+        .prob-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .prob-track {
+            background: #F0F4F8;
+            border-radius: 5px;
+            height: 9px;
+            overflow: hidden;
+        }
+
+        .prob-fill {
+            height: 100%;
+            border-radius: 5px;
+            transition: width 0.7s ease;
+        }
+
+        .prob-fill.normal {
+            background: var(--normal);
+        }
+
+        .prob-fill.cyst {
+            background: var(--cyst);
+        }
+
+        .prob-fill.stone {
+            background: var(--stone);
+        }
+
+        .prob-fill.tumour {
+            background: var(--tumour);
+        }
+
+        .clinical-note {
+            background: #FFF8E1;
+            border: 1px solid #FFE082;
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 12px;
+            color: #5D4037;
+            line-height: 1.5;
+        }
+
+        .clinical-note.urgent {
+            background: #FFEBEE;
+            border-color: #EF9A9A;
+            color: #7f0000;
+        }
+
+        .clinical-note strong {
+            display: block;
+            margin-bottom: 3px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Grad-CAM section */
+        .gradcam-section {
+            margin-top: 24px;
+        }
+
+        .gradcam-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 12px;
+        }
+
+        .gradcam-card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .gradcam-card h3 {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--navy);
+            margin-bottom: 10px;
+        }
+
+        .gradcam-card img {
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .gradcam-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            color: var(--muted);
+            font-size: 13px;
+            gap: 8px;
+        }
+
+        .gradcam-empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 120px;
+            color: var(--muted);
+            font-size: 13px;
+            opacity: 0.6;
+        }
+
+        .legend-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            justify-content: center;
+            margin-top: 8px;
+            font-size: 11px;
+            color: var(--muted);
+        }
+
+        .heat-bar {
+            width: 120px;
+            height: 10px;
+            border-radius: 5px;
+            background: linear-gradient(to right, #00008B, #0000FF, #00FFFF, #00FF00, #FFFF00, #FF7F00, #FF0000);
+        }
+
+        /* History */
+        .history-section {
+            margin-top: 24px;
+        }
+
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .history-item {
+            background: var(--card);
+            border-radius: 10px;
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: box-shadow 0.2s;
+        }
+
+        .history-item:hover {
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .history-thumb {
+            width: 44px;
+            height: 44px;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .history-info {
+            flex: 1;
+        }
+
+        .history-pred {
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .history-pred.normal {
+            color: var(--normal);
+        }
+
+        .history-pred.cyst {
+            color: var(--cyst);
+        }
+
+        .history-pred.stone {
+            color: var(--stone);
+        }
+
+        .history-pred.tumour {
+            color: var(--tumour);
+        }
+
+        .history-meta {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 1px;
+        }
+
+        .history-conf {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--muted);
+        }
+
+        .model-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 24px;
+        }
+
+        .stat-card {
+            background: var(--card);
+            border-radius: 10px;
+            padding: 12px;
+            text-align: center;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+            border: 1px solid var(--border);
+        }
+
+        .stat-val {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--sky);
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 3px;
+        }
+
+        .spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+            margin-right: 6px;
+        }
+
+        .mini-spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(0, 0, 0, 0.15);
+            border-top-color: var(--sky);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @media(max-width:700px) {
+
+            .top-grid,
+            .gradcam-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .legend,
+            .model-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <div class="logo">
+            <div style="font-size:26px">🔬</div>
+            <div>
+                <h1>NephroScan AI <span>v2</span></h1>
+                <span>4-Class Kidney Classifier + Grad-CAM</span>
+            </div>
+        </div>
+        <div class="status-badge">
+            <div class="dot" id="statusDot"></div>
+            <span id="statusText">Checking...</span>
+        </div>
+    </header>
+
+    <main>
+
+        <!-- Legend -->
+        <div class="legend">
+            <div class="legend-card normal">
+                <div class="cls-name">🟢 Normal</div>
+                <div class="cls-desc">Healthy kidney — no pathology</div>
+            </div>
+            <div class="legend-card cyst">
+                <div class="cls-name">🔵 Cyst</div>
+                <div class="cls-desc">Fluid-filled sac — usually benign</div>
+            </div>
+            <div class="legend-card stone">
+                <div class="cls-name">🟠 Stone</div>
+                <div class="cls-desc">Calcified deposit — urology referral</div>
+            </div>
+            <div class="legend-card tumour">
+                <div class="cls-name">🔴 Tumour</div>
+                <div class="cls-desc">Renal mass — urgent referral</div>
+            </div>
+        </div>
+
+        <!-- Top grid: Upload + Result -->
+        <div class="top-grid">
+
+            <!-- Upload -->
+            <div class="card">
+                <h2>📤 Upload CT Scan</h2>
+                <div class="drop-zone" id="dropZone">
+                    <input type="file" id="fileInput" accept="image/jpeg,image/png" />
+                    <div class="drop-icon">🫁</div>
+                    <div class="drop-text"><strong>Click to upload</strong> or drag & drop<br>JPG / PNG · Max 10MB</div>
+                </div>
+                <div class="preview-wrap" id="previewWrap">
+                    <img id="previewImg" src="" alt="Preview" />
+                    <div class="file-name" id="fileName"></div>
+                </div>
+                <label class="gradcam-toggle">
+                    <input type="checkbox" id="gradcamToggle" checked />
+                    Show Grad-CAM heatmap (what the AI looks at)
+                </label>
+                <button class="btn" id="analyseBtn" disabled>Analyse Image</button>
+            </div>
+
+            <!-- Result -->
+            <div class="card">
+                <h2>🧠 AI Diagnosis</h2>
+                <div class="result-empty" id="resultEmpty">
+                    <div class="icon">🫘</div>
+                    <div>Upload a kidney CT scan<br>to get a diagnosis</div>
+                </div>
+                <div class="result-content" id="resultContent">
+                    <div class="verdict" id="verdictBox">
+                        <div class="verdict-icon" id="verdictIcon"></div>
+                        <div>
+                            <div class="verdict-label">Detected Condition</div>
+                            <div class="verdict-name" id="verdictName"></div>
+                            <div class="verdict-conf" id="verdictConf"></div>
+                        </div>
+                    </div>
+                    <div class="prob-bars" id="probBars"></div>
+                    <div class="clinical-note" id="clinicalNote">
+                        <strong>📋 Clinical Note</strong>
+                        <span id="clinicalText"></span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Grad-CAM section -->
+        <div class="gradcam-section" id="gradcamSection" style="display:none">
+            <div class="card">
+                <h2>🔥 Grad-CAM — What the AI is Looking At</h2>
+                <div class="gradcam-loading" id="gradcamLoading" style="display:none">
+                    <span class="mini-spinner"></span> Generating heatmap...
+                </div>
+                <div class="gradcam-grid" id="gradcamGrid" style="display:none">
+                    <div class="gradcam-card">
+                        <h3>Original CT Scan</h3>
+                        <img id="originalImg" src="" alt="Original" />
+                    </div>
+                    <div class="gradcam-card">
+                        <h3>Grad-CAM Heatmap</h3>
+                        <img id="heatmapImg" src="" alt="Heatmap" />
+                        <div class="legend-bar">
+                            <span>Low</span>
+                            <div class="heat-bar"></div>
+                            <span>High attention</span>
+                        </div>
+                    </div>
+                </div>
+                <p style="font-size:12px;color:var(--muted);margin-top:10px;text-align:center">
+                    Red/yellow zones = areas the model focused on when making this prediction
+                </p>
+            </div>
+        </div>
+
+        <!-- Model stats -->
+        <div class="model-stats">
+            <div class="stat-card">
+                <div class="stat-val">97.0%</div>
+                <div class="stat-label">Test Accuracy</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-val">0.998</div>
+                <div class="stat-label">Macro AUC-ROC</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-val">12,446</div>
+                <div class="stat-label">Training Images</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-val">GradCAM++</div>
+                <div class="stat-label">Explainability</div>
+            </div>
+        </div>
+
+        <!-- History -->
+        <div class="history-section">
+            <div class="card">
+                <h2>🕓 Prediction History</h2>
+                <div class="history-list" id="historyList">
+                    <div style="color:var(--muted);font-size:13px;text-align:center;padding:16px">No predictions yet
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        const API = 'http://localhost:8001';
+        const ICONS = { normal: '✅', cyst: '🔵', stone: '🟠', tumour: '🔴' };
+        const LABELS = { normal: 'Normal Kidney', cyst: 'Kidney Cyst', stone: 'Kidney Stone', tumour: 'Kidney Tumour' };
+
+        let selectedFile = null;
+        let history = [];
+
+        // ── Status ────────────────────────────────────────────────────────────────────
+        async function checkStatus() {
+            try {
+                const r = await fetch(`${API}/health`, { signal: AbortSignal.timeout(3000) });
+                const d = await r.json();
+                if (d.model_loaded) {
+                    document.getElementById('statusDot').className = 'dot online';
+                    document.getElementById('statusText').textContent = `Online · ${d.device} · GradCAM`;
+                } else { setOffline('Model not loaded'); }
+            } catch { setOffline('API Offline'); }
+        }
+        function setOffline(msg) {
+            document.getElementById('statusDot').className = 'dot offline';
+            document.getElementById('statusText').textContent = msg;
+        }
+        checkStatus();
+        setInterval(checkStatus, 15000);
+
+        // ── File handling ─────────────────────────────────────────────────────────────
+        const fileInput = document.getElementById('fileInput');
+        const dropZone = document.getElementById('dropZone');
+        const previewWrap = document.getElementById('previewWrap');
+        const previewImg = document.getElementById('previewImg');
+        const analyseBtn = document.getElementById('analyseBtn');
+
+        function handleFile(file) {
+            if (!file || !file.type.match(/image\/(jpeg|png|jpg)/)) return;
+            if (file.size > 10 * 1024 * 1024) { alert('File too large — max 10MB'); return; }
+            selectedFile = file;
+            const url = URL.createObjectURL(file);
+            previewImg.src = url;
+            document.getElementById('fileName').textContent = file.name;
+            previewWrap.style.display = 'block';
+            analyseBtn.disabled = false;
+            document.getElementById('resultEmpty').style.display = 'flex';
+            document.getElementById('resultContent').style.display = 'none';
+            document.getElementById('gradcamSection').style.display = 'none';
+        }
+
+        fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+        dropZone.addEventListener('drop', e => {
+            e.preventDefault(); dropZone.classList.remove('drag-over');
+            handleFile(e.dataTransfer.files[0]);
+        });
+
+        // ── Analyse ───────────────────────────────────────────────────────────────────
+        analyseBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+            const includeGradcam = document.getElementById('gradcamToggle').checked;
+
+            analyseBtn.disabled = true;
+            analyseBtn.innerHTML = '<span class="spinner"></span>Analysing...';
+
+            // Show gradcam loading if requested
+            if (includeGradcam) {
+                document.getElementById('gradcamSection').style.display = 'block';
+                document.getElementById('gradcamLoading').style.display = 'flex';
+                document.getElementById('gradcamGrid').style.display = 'none';
+            }
+
+            try {
+                const form = new FormData();
+                form.append('file', selectedFile);
+                const url = `${API}/predict?include_gradcam=${includeGradcam}`;
+                const r = await fetch(url, { method: 'POST', body: form });
+                if (!r.ok) { const e = await r.json(); throw new Error(e.detail); }
+                const data = await r.json();
+                showResult(data);
+                if (includeGradcam && data.gradcam_heatmap) showGradcam(data.gradcam_heatmap);
+                else document.getElementById('gradcamSection').style.display = 'none';
+                addHistory(data, previewImg.src);
+            } catch (err) {
+                alert(`Error: ${err.message}\n\nMake sure API is running:\nuvicorn api.main_v2:app --port 8001 --reload`);
+                document.getElementById('gradcamSection').style.display = 'none';
+            } finally {
+                analyseBtn.disabled = false;
+                analyseBtn.textContent = 'Analyse Image';
+            }
+        });
+
+        // ── Show result ───────────────────────────────────────────────────────────────
+        function showResult(data) {
+            const pred = data.prediction;
+            const probs = data.probabilities;
+            const conf = (data.confidence * 100).toFixed(1);
+
+            document.getElementById('resultEmpty').style.display = 'none';
+            document.getElementById('resultContent').style.display = 'block';
+
+            const box = document.getElementById('verdictBox');
+            box.className = `verdict ${pred}`;
+            document.getElementById('verdictIcon').textContent = ICONS[pred];
+            document.getElementById('verdictName').textContent = LABELS[pred];
+            document.getElementById('verdictConf').textContent = `${conf}% confidence`;
+
+            const bars = document.getElementById('probBars');
+            bars.innerHTML = '';
+            ['normal', 'cyst', 'stone', 'tumour'].forEach(cls => {
+                const pct = (probs[cls] * 100).toFixed(1);
+                bars.innerHTML += `
+      <div class="prob-row">
+        <div class="prob-header"><span>${ICONS[cls]} ${cls.charAt(0).toUpperCase() + cls.slice(1)}</span><span>${pct}%</span></div>
+        <div class="prob-track"><div class="prob-fill ${cls}" style="width:${pct}%"></div></div>
+      </div>`;
+            });
+
+            const noteEl = document.getElementById('clinicalNote');
+            noteEl.className = pred === 'tumour' ? 'clinical-note urgent' : 'clinical-note';
+            document.getElementById('clinicalText').textContent = data.clinical_note;
+        }
+
+        // ── Show Grad-CAM ─────────────────────────────────────────────────────────────
+        function showGradcam(heatmapB64) {
+            document.getElementById('gradcamLoading').style.display = 'none';
+            document.getElementById('gradcamGrid').style.display = 'grid';
+            document.getElementById('originalImg').src = previewImg.src;
+            document.getElementById('heatmapImg').src = heatmapB64;
+        }
+
+        // ── History ───────────────────────────────────────────────────────────────────
+        function addHistory(data, imgSrc) {
+            history.unshift({ data, imgSrc, time: new Date().toLocaleTimeString() });
+            if (history.length > 8) history.pop();
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const list = document.getElementById('historyList');
+            if (!history.length) {
+                list.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px">No predictions yet</div>';
+                return;
+            }
+            list.innerHTML = history.map((h, i) => `
+    <div class="history-item" onclick="reloadHistory(${i})">
+      <img class="history-thumb" src="${h.imgSrc}" alt="scan"/>
+      <div class="history-info">
+        <div class="history-pred ${h.data.prediction}">${ICONS[h.data.prediction]} ${LABELS[h.data.prediction]}</div>
+        <div class="history-meta">${h.time} · ${(h.data.confidence * 100).toFixed(1)}% confidence</div>
+      </div>
+      <div class="history-conf">${(h.data.confidence * 100).toFixed(0)}%</div>
+    </div>`).join('');
+        }
+
+        function reloadHistory(i) { showResult(history[i].data); }
+    </script>
+</body>
+
+</html>

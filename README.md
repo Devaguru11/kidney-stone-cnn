@@ -1,371 +1,243 @@
-# 🫘 NephroScan AI — Kidney Stone Detection CNN
+# 🫘 NephroScan AI
+### Unified Kidney Analysis — 3-Model Deep Learning Pipeline
 
-> **Author:** Devaguru  
-> **Last Updated:** February 2026  
-> **Status:** ✅ All 6 Phases Complete  
-> **Live API:** `http://localhost:8000/docs`
-
----
-
-## 🏆 Results at a Glance
-
-| Metric | Result | Target | Status |
-|--------|--------|--------|--------|
-| AUC-ROC | **1.0000** | ≥ 0.95 | 🔥 Exceeded |
-| Sensitivity | **1.0000** | ≥ 0.92 | 🔥 Exceeded |
-| Specificity | **0.9917** | ≥ 0.88 | 🔥 Exceeded |
-| F2-Score | **0.9877** | ≥ 0.90 | 🔥 Exceeded |
-| False Negatives | **0** | Minimise | 🔥 Zero missed stones |
-| False Positives | **14** | < 5% of negatives | ✅ 0.83% |
-
-> **Model:** EfficientNet-B4 · **Test set:** 1,904 images · **Zero missed stones across entire test set**
+> **Author:** Devaguru · **March 2026** · **Status:** ✅ Complete  
+> **Stack:** EfficientNet-B4 · FastAPI · Grad-CAM++ · ReportLab · Apple MPS
 
 ---
 
-## 📊 Project Progress
+## What This Does
 
-| Phase | Description | Status | Duration |
-|-------|-------------|--------|----------|
-| 1 | Data Acquisition & Label Verification | ✅ Complete | ~2 Days |
-| 2 | Model Training | ✅ Complete | ~3 Days |
-| 3 | Evaluation & Explainability | ✅ Complete | ~2 Days |
-| 4 | API Development (FastAPI) | ✅ Complete | ~1 Day |
-| 5 | UI Development (HTML/CSS/JS) | ✅ Complete | ~1 Day |
-| 6 | Monitoring (Prometheus) | ✅ Complete | ~1 Day |
+Upload one kidney CT scan. Get results from 3 AI models simultaneously.
+
+```
+CT Scan
+  ↓
+v1 · Stone Detector          binary · 99.2% accuracy · AUC 1.0000
+  ↓
+v2 · 4-Class Classifier      Normal / Cyst / Stone / Tumour · 97.0% accuracy
+  ↓
+v3 · Cancer Detector         Cancer / Not Cancer · AUC 0.9999 · Precision 100%
+  ↓
+Risk Level + Grad-CAM Heatmap + Clinical PDF Report
+```
 
 ---
 
-## 📁 Project Structure
+## Results at a Glance
+
+| Model | Task | Accuracy | AUC | Key Metric |
+|-------|------|----------|-----|------------|
+| **v1** | Stone Detection | **99.2%** | **1.0000** | 0 missed stones |
+| **v2** | 4-Class Classification | **97.0%** | **0.9984** | Tumour recall 92.7% |
+| **v3** | Cancer Detection | **99.6%** | **0.9999** | Precision **100%** |
+
+### v2 — 4-Class Training
+| Epoch | Acc | AUC | Tumour Recall | Note |
+|-------|-----|-----|--------------|------|
+| 1 | 71.4% | 0.9041 | 67.0% | Backbone frozen |
+| 3 | 76.0% | 0.9278 | 63.4% | Backbone frozen |
+| 4 | 92.0% | 0.9929 | 96.7% | ← Backbone unfrozen |
+| 5 | 95.6% | 0.9960 | 88.8% | Fine-tuning |
+| **6** | **97.2%** | **0.9986** | **92.7%** | ← **Best checkpoint** |
+
+### v3 — Cancer Detector Training
+| Epoch | Acc | AUC | Cancer Recall | Precision | Note |
+|-------|-----|-----|--------------|-----------|------|
+| 1 | 94.4% | 0.9983 | 99.4% | 77.9% | Backbone frozen |
+| 4 | 99.4% | 0.9998 | 97.2% | 99.4% | ← Backbone unfrozen |
+| **5** | **99.6%** | **0.9999** | **98.0%** | **100.0%** | ← **Best checkpoint** |
+
+---
+
+## Quick Start
+
+```bash
+# 1. Activate environment
+cd '/Users/devaguru/Kidney Stone CNN/kidney-stone-cnn'
+source .venv/bin/activate
+
+# 2. Start the unified API
+uvicorn api.unified_main:app --port 8000 --reload
+```
+
+Expected output:
+```
+Loading 3 models on mps...
+  v1 stone detector loaded ✅
+  v2 4-class classifier loaded ✅
+  v3 cancer detector loaded ✅
+All 3 models ready ✅
+```
+
+```bash
+# 3. Open the dashboard
+open nephroscan_unified.html
+```
+
+---
+
+## API Reference
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/predict` | CT scan → all 3 model results + Grad-CAM heatmap |
+| `POST` | `/report` | Generate downloadable clinical PDF |
+| `GET` | `/health` | Server status + device (MPS/CUDA/CPU) |
+| `GET` | `/model-info` | Architecture, parameters, accuracy per model |
+| `GET` | `/docs` | Interactive Swagger UI |
+
+### Sample Response
+
+```json
+{
+  "v1": {
+    "prediction": "no_stone",
+    "has_stone": false,
+    "confidence": 0.9821,
+    "probabilities": { "stone": 0.0179, "no_stone": 0.9821 }
+  },
+  "v2": {
+    "prediction": "normal",
+    "confidence": 0.9614,
+    "color": "#2E7D32",
+    "clinical_note": "No abnormality detected. Routine follow-up recommended.",
+    "probabilities": { "normal": 0.9614, "cyst": 0.021, "stone": 0.011, "tumour": 0.006 }
+  },
+  "v3": {
+    "prediction": "not_cancer",
+    "is_cancer": false,
+    "cancer_prob": 0.0012,
+    "confidence": 0.9988
+  },
+  "risk_level": "NORMAL",
+  "gradcam_heatmap": "data:image/png;base64,..."
+}
+```
+
+---
+
+## Architecture
+
+All 3 models share the same backbone:
+
+```
+EfficientNet-B4 (pretrained ImageNet)
+  → BatchNorm1d(1792)
+  → Dropout(0.4)
+  → Linear(1792 → 512)
+  → GELU
+  → BatchNorm1d(512)
+  → Dropout(0.3)
+  → Linear(512 → N)      ← N=2 for v1/v3, N=4 for v2
+```
+
+**Training strategy (v2 & v3):**
+- Epochs 1–3: backbone frozen, head only (`lr=1e-3`)
+- Epochs 4+: full fine-tune (backbone `lr=1e-4`, head `lr=1e-3`)
+- Loss: Focal Loss (`γ=2.0`)
+- Optimiser: AdamW + WeightedRandomSampler
+- Inference: Temperature scaling (`T=0.5`)
+- v3 backbone initialised from v2 weights → faster convergence
+
+---
+
+## Dataset
+
+**Source:** [CT Kidney Dataset — Normal, Cyst, Tumor, Stone](https://www.kaggle.com/datasets/nazmul0087/ct-kidney-dataset-normal-cyst-tumor-and-stone) · CC BY 4.0
+
+| Split | Normal | Cyst | Stone | Tumour | Total |
+|-------|--------|------|-------|--------|-------|
+| Train | 5,077 | 1,800 | 952 | 2,079 | **9,908** |
+| Val | 1,089 | 386 | 204 | 446 | **2,125** |
+| Test | 1,089 | 386 | 224 | 446 | **2,145** |
+| **Total** | **7,255** | **2,572** | **1,380** | **2,971** | **12,446** |
+
+**Preprocessing:** Resize 224×224 (Lanczos) → CLAHE (`clipLimit=4.0`) → BGR→RGB  
+**Split:** Deterministic MD5 filename hash — 70/15/15, no random seed dependency
+
+**v3 label mapping:**
+
+| v2 Class | v3 Label |
+|----------|----------|
+| Tumour | ✅ Cancer |
+| Normal | ❌ Not Cancer |
+| Cyst | ❌ Not Cancer |
+| Stone | ❌ Not Cancer |
+
+---
+
+## Project Structure
 
 ```
 kidney-stone-cnn/
 ├── api/
-│   ├── __init__.py
-│   ├── main.py               # FastAPI app — 5 endpoints + Prometheus metrics
-│   ├── inference.py          # KidneyStonePredictor — loads model once at startup
-│   ├── metrics.py            # Custom Prometheus metric definitions
-│   └── schemas.py            # Pydantic request/response schemas
-│
-├── src/
-│   ├── data/
-│   │   ├── dataset.py        # PyTorch Dataset class
-│   │   ├── datamodule.py     # DataLoaders + WeightedRandomSampler
-│   │   └── augmentations.py  # Albumentations train/val transforms
-│   ├── models/
-│   │   └── efficientnet.py   # EfficientNet-B4 + custom classification head
-│   ├── training/
-│   │   ├── losses.py         # Focal Loss (γ=2.0, α=0.75)
-│   │   ├── metrics.py        # Sensitivity, AUC, F2, confusion matrix
-│   │   └── trainer.py
-│   └── evaluation/
-│       ├── gradcam.py        # Grad-CAM++ heatmap generation
-│       ├── error_analysis.py # False positive/negative visualisation
-│       └── calibration.py    # Threshold optimisation + calibration curve
-│
-├── scripts/
-│   ├── organize_data.py      # Maps 4-class → binary labels
-│   ├── preprocess_data.py    # Resize to 224×224 + CLAHE
-│   ├── split_data.py         # Deterministic train/val/test split
-│   ├── generate_annotations.py
-│   ├── verify_labels.py      # 5-check automated QA
-│   ├── train.py              # Full training loop with MLflow
-│   ├── export_onnx.py        # Export model to ONNX (20× CPU speedup)
-│   ├── test_api.py           # Automated API test suite
-│   └── generate_report.py    # Auto-generates clinical HTML report
-│
-├── notebooks/
-│   ├── 01_eda.ipynb          # Phase 1 — Exploratory data analysis
-│   ├── 02_training.ipynb     # Phase 2 — Training monitoring
-│   └── 03_gradcam.ipynb      # Phase 3 — Grad-CAM visualisations
-│
-├── monitoring/
-│   ├── docker-compose.yml    # Prometheus + Grafana containers
-│   └── prometheus.yml        # Scrape config pointing to /metrics
+│   ├── unified_main.py        ← FastAPI app · port 8000 · all 3 models
+│   ├── unified_inference.py   ← Loads 3 models + Grad-CAM++
+│   ├── unified_report.py      ← Clinical PDF generation (ReportLab)
+│   ├── main.py                ← Legacy v1 API
+│   └── inference.py           ← Legacy v1 inference
 │
 ├── checkpoints/
-│   ├── best_model.pth        # PyTorch checkpoint (val AUC = 1.0, epoch 7)
-│   └── best_model.onnx       # ONNX export (20× faster on CPU)
+│   ├── best_model.pth         ← v1 · binary stone · 99.2% acc
+│   ├── best_model_v2.pth      ← v2 · 4-class · 97.0% acc
+│   └── best_model_v3.pth      ← v3 · cancer · AUC 0.9999
 │
-├── reports/
-│   ├── clinical_report.html  # Full clinical evaluation report
-│   ├── model_card.md         # Regulatory model documentation
-│   ├── gradcam_stone.png
-│   ├── gradcam_no_stone.png
-│   ├── false_positives.png
-│   ├── threshold_curve.png
-│   └── calibration_curve.png
+├── notebooks/
+│   ├── 01_eda.ipynb
+│   ├── 02_training.ipynb
+│   ├── 03_gradcam.ipynb
+│   ├── 05_train_v2.ipynb
+│   └── 06_cancer_detection.ipynb
 │
-├── data/
-│   ├── external/             # Raw downloaded datasets (never modified)
-│   ├── processed/            # Clean 224×224 preprocessed images
-│   └── labels/               # splits.csv, annotations.json, QA reports
+├── src/                       ← data · models · training · evaluation
+├── scripts/                   ← preprocess · split · verify · export
+├── data/                      ← processed 224×224 CT images
+├── reports/                   ← grad-cam · calibration · model card
+├── monitoring/                ← Prometheus + Grafana
 │
-├── mlruns/                   # MLflow experiment tracking
-├── Dockerfile
-├── docker-compose.yml
-├── entrypoint.sh
-├── nephroscan.html           # Single-file web dashboard UI
-├── requirements.txt          # Full training + serving dependencies
-├── requirements_api.txt      # API-only dependencies (for Docker)
-└── README.md
+├── nephroscan_unified.html    ← Unified dark dashboard (v3)
+├── nephroscan.html            ← Legacy v1 dashboard
+└── requirements.txt
 ```
 
 ---
 
-## 🗃️ Datasets Used
+## Dashboard Features
 
-### Dataset 1 — CT Kidney Dataset (Primary)
-| Field | Detail |
-|-------|--------|
-| Source | Kaggle — CT KIDNEY DATASET: Normal-Cyst-Tumor-Stone |
-| URL | kaggle.com/datasets/nazmul0087/ct-kidney-dataset-normal-cyst-tumor-and-stone |
-| Total images | 12,446 |
-| Format | JPEG, color |
-| Original classes | Stone, Cyst, Normal, Tumor |
-| License | CC BY 4.0 |
-
-**Label mapping:**
-| Original Class | Mapped To | Reason |
-|---------------|-----------|--------|
-| Stone | `stone` | Direct positive class |
-| Cyst | `no_stone` | Different condition |
-| Normal | `no_stone` | Healthy kidney |
-| Tumor | `no_stone` | Different pathology |
-
-### Dataset 2 — Kidney Ultrasound Dataset
-| Field | Detail |
-|-------|--------|
-| Source | Kaggle — Kidney Stone Ultrasound Image Dataset |
-| URL | kaggle.com/datasets/safurahajiheidari/kidney-stone-ultrasound-image-dataset |
-| Classes | stone, Normal (already binary) |
-| License | CC BY 4.0 |
+- Dark UI — navy/teal design, animated scan ring loader
+- Drag & drop CT scan upload
+- 3 model result cards side by side — confidence bars, probability breakdown
+- Risk banner — `NORMAL` / `LOW` / `MEDIUM` / `HIGH`
+- Grad-CAM heatmap — original scan vs AI focus area
+- Prediction history table
+- Download clinical PDF report per scan
 
 ---
 
-## 📊 Dataset Statistics
+## Known Limitations
 
-| Split | Stone | No-Stone | Total | Stone % |
-|-------|-------|----------|-------|---------|
-| Train | 952 | 7,728 | 8,680 | 11.0% |
-| Val | 201 | 1,661 | 1,862 | 10.8% |
-| Test | 224 | 1,680 | 1,904 | 11.8% |
-| **Total** | **1,377** | **11,069** | **12,446** | **11.1%** |
-
-**Class imbalance:** 8.0:1 — handled with Focal Loss (γ=2.0, α=0.75) + WeightedRandomSampler
-
----
-
-## ✅ Phase 1 — Data Acquisition & Label Verification
-
-### Preprocessing
-| Step | Operation | Parameters |
-|------|-----------|------------|
-| 1 | Resize | 224 × 224 pixels, Lanczos interpolation |
-| 2 | CLAHE | clipLimit=4.0, tileGridSize=(8,8) |
-| 3 | Format | Saved as JPEG, BGR→RGB corrected |
-
-### Label Verification (5 automated checks)
-| Check | Result | Detail |
-|-------|--------|--------|
-| Class balance | WARNING (expected) | 8.1:1 imbalance — handled in Phase 2 |
-| Duplicate detection | WARNING (expected) | 2,579 sequential CT slice groups — not true duplicates |
-| Corrupt / blank images | PASSED | 0 corrupt, 0 blank found |
-| Train/test leakage | PASSED | No filename appears in both splits |
-| Image size consistency | PASSED | All images exactly (224, 224) |
-
-### Split Strategy
-Deterministic MD5 filename hashing — same split every run, no random seed dependency, 70/15/15 distribution.
-
-```python
-def stable_hash(filename: str) -> float:
-    h = int(hashlib.md5(filename.encode()).hexdigest(), 16)
-    return (h % 10000) / 10000.0
-```
+| Limitation | Detail |
+|------------|--------|
+| Research only | Not validated for clinical use. Findings must be reviewed by a clinician. |
+| CT scans only | Trained on CT images. Performance on ultrasound/MRI not validated. |
+| No patient split | Dataset has no patient IDs — CT slices may appear in train and test. |
+| No API auth | Do not expose port 8000 publicly without authentication middleware. |
+| Kidney only | Single organ. Pan-cancer detection requires organ-specific models. |
 
 ---
 
-## ✅ Phase 2 — Model Training
+## License
 
-### Architecture
-| Component | Detail |
-|-----------|--------|
-| Backbone | EfficientNet-B4 (pretrained ImageNet) |
-| Head | AdaptiveAvgPool → BN → Dropout(0.4) → Linear(1792→512) → GELU → Dropout(0.3) → Linear(512→2) |
-| Parameters | 18,471,242 |
-| Loss | Focal Loss (γ=2.0, α=0.75) |
-| Optimiser | AdamW — backbone lr=1e-4, head lr=1e-3 |
-| Scheduler | CosineAnnealingLR |
-| Device | Apple MPS (MacBook Air M-series) |
-
-### Training Progress
-| Epoch | AUC-ROC | Sensitivity | Note |
-|-------|---------|-------------|------|
-| 1 | 0.9086 | 0.9502 | Backbone frozen |
-| 2 | 0.9296 | 0.9403 | Backbone frozen |
-| 3 | 0.9578 | 0.9751 | Backbone frozen |
-| 4 | 0.9965 | 0.9950 | Backbone unfrozen |
-| 5 | 0.9996 | 0.9950 | Fine-tuning |
-| 6 | 0.9998 | 0.9900 | Fine-tuning |
-| **7** | **1.0000** | **1.0000** | **Converged — training stopped** |
+Dataset: CC BY 4.0  
+Code & weights: Internal Research Project
 
 ---
 
-## ✅ Phase 3 — Evaluation & Explainability
-
-- **Grad-CAM++** heatmaps confirm model focuses on kidney anatomy, not image artifacts
-- **14 false positives** analysed — cysts, vascular calcifications, compression artifacts
-- **Threshold calibration** using F2-score on validation set
-- **Clinical report** auto-generated at `reports/clinical_report.html`
-
-```bash
-open reports/clinical_report.html
-```
+> ⚠️ **This project is for research and portfolio purposes only.**  
+> It is not approved for clinical use and must not be used to make medical decisions.  
+> All AI outputs require review by a qualified healthcare professional.
 
 ---
 
-## ✅ Phase 4 — FastAPI Inference Server
-
-### Endpoints
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/predict` | Single image → prediction + optional Grad-CAM |
-| `POST` | `/predict/batch` | Up to 10 images in one request |
-| `GET` | `/health` | Server + model status |
-| `GET` | `/model-info` | Architecture, parameters, metrics |
-| `GET` | `/docs` | Interactive Swagger UI |
-| `GET` | `/metrics` | Prometheus scrape endpoint |
-
-### Sample Response
-```json
-{
-  "prediction": "stone",
-  "confidence": 0.9988,
-  "probability_stone": 0.9988,
-  "probability_no_stone": 0.0012,
-  "gradcam_heatmap": "<base64 PNG or null>",
-  "model_version": "efficientnet_b4_v1",
-  "threshold_used": 0.5
-}
-```
-
-### ONNX Export
-| Runtime | Latency per image |
-|---------|-------------------|
-| PyTorch (MPS) | 482.6ms |
-| ONNX (CPU) | 23.6ms |
-| **Speedup** | **20.4×** |
-
-### Start the Server
-```bash
-cd '/Users/devaguru/Kidney Stone CNN/kidney-stone-cnn'
-source .venv/bin/activate
-uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### Quick Test
-```bash
-cp "/Users/devaguru/Kidney Stone CNN/kidney-stone-cnn/data/processed/test/stone/Stone- (1004).jpg" /tmp/test_stone.jpg
-
-curl -X POST "http://localhost:8000/predict?include_gradcam=false" \
-  -F "file=@/tmp/test_stone.jpg"
-```
-
----
-
-## ✅ Phase 5 - NephroScan Dashboard
-
-Open `nephroscan.html` in your browser — no install needed. Requires FastAPI on `http://localhost:8000`.
-
-Features: drag & drop upload, stone/no-stone verdict, confidence bars, Grad-CAM heatmap, prediction history, model status badge.
-
----
-
-## ✅ Phase 6 — Prometheus Monitoring
-
-### Metrics at `/metrics`
-| Metric | Type | Description |
-|--------|------|-------------|
-| `kidney_predictions_total` | Counter | Total predictions labelled by class |
-| `kidney_confidence_score` | Histogram | Distribution of confidence scores |
-| `kidney_inference_latency_seconds` | Histogram | Per-request inference time |
-| `kidney_model_loaded` | Gauge | 1 = loaded, 0 = unloaded |
-| `kidney_active_requests` | Gauge | Requests currently being processed |
-| `http_requests_total` | Counter | Total HTTP requests (auto) |
-
-### Start Monitoring Stack
-```bash
-cd monitoring/
-docker compose up -d
-# Prometheus: http://localhost:9090
-```
-
-### Useful PromQL Queries
-```promql
-sum(kidney_predictions_total)
-kidney_confidence_score_sum / kidney_confidence_score_count
-rate(kidney_inference_latency_seconds_sum[5m]) / rate(kidney_inference_latency_seconds_count[5m]) * 1000
-rate(http_requests_total[5m]) * 60
-```
-
----
-
-## 🚀 Full Reproduction Guide
-
-```bash
-# 1. Clone and enter project
-git clone <repo-url>
-cd kidney-stone-cnn
-
-# 2. Create virtual environment
-python -m venv venv
-source venv/bin/activate
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Download datasets into data/external/
-
-# 5. Phase 1 — Data pipeline
-python scripts/organize_data.py
-python scripts/preprocess_data.py
-python scripts/split_data.py
-python scripts/generate_annotations.py
-python scripts/verify_labels.py
-
-# 6. Phase 2 — Train (~90 min on Apple MPS)
-python scripts/train.py
-
-# 7. Phase 3 — Evaluate
-# Run notebooks/03_gradcam.ipynb
-python scripts/generate_report.py
-
-# 8. Phase 4 — API
-uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
-
-# 9. Phase 5 — Dashboard
-`http://localhost:8000`
-
-# 10. Phase 6 — Monitoring
-cd monitoring && docker compose up -d
-```
-
----
-
-## ⚠️ Known Limitations
-
-1. **No patient-level split** — Kaggle dataset has no patient IDs. Sequential CT slices may appear in both train and test, potentially inflating metrics. External validation recommended before clinical use.
-2. **AUC = 1.0 caveat** — Likely reflects CT slice similarity between splits. Not indicative of true generalisation on unseen scanner data.
-3. **Low stone image count** — Only 952 stone training images. Rare variants (< 3mm) may be underdetected.
-4. **No API authentication** — Do not expose port 8000 publicly without adding auth middleware.
-5. **No bounding box annotations** — Classification only. Localisation deferred to a future phase.
-6. **CT-heavy dataset** — Model performance on ultrasound should be evaluated on a dedicated ultrasound test set.
-
----
-
-## 📄 License
-
-Datasets used under CC BY 4.0. Model weights and code — Internal Research Project.
-
----
-
-*NephroScan AI · Kidney Stone Detection CNN · Devaguru · February 2026*
+*NephroScan AI · Devaguru · March 2026 · 3 Models · 12,446 Images · EfficientNet-B4*
